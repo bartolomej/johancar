@@ -17,13 +17,10 @@ import (
 )
 
 type Server struct {
-	videoBuffer  []byte
-	videoMutex   sync.RWMutex
-	lastCommand  string
-	commandMutex sync.RWMutex
-	commandTime  time.Time
-	frameCount   int
-	frameMutex   sync.Mutex
+	videoBuffer []byte
+	videoMutex  sync.RWMutex
+	frameCount  int
+	frameMutex  sync.Mutex
 }
 
 func NewServer() *Server {
@@ -111,6 +108,10 @@ func (s *Server) streamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) pushCommandToHardware(command string) {
+	log.Printf("Pushing command to hardware: %s", command)
+}
+
 func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -131,34 +132,10 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.commandMutex.Lock()
-	s.lastCommand = cmd.Command
-	s.commandTime = time.Now()
-	s.commandMutex.Unlock()
-
-	log.Printf("Received command: %s", cmd.Command)
+	s.pushCommandToHardware(cmd.Command)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "command": cmd.Command})
-}
-
-func (s *Server) getCommand(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	s.commandMutex.RLock()
-	command := s.lastCommand
-	commandTime := s.commandTime
-	s.commandMutex.RUnlock()
-
-	if time.Since(commandTime) > 5*time.Second {
-		command = ""
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"command": command})
 }
 
 func (s *Server) handleWebView(w http.ResponseWriter, r *http.Request) {
@@ -179,14 +156,12 @@ func main() {
 	http.HandleFunc("/video", server.streamVideo)
 	http.HandleFunc("/api/video", server.handleVideoFeed)
 	http.HandleFunc("/api/command", server.handleCommand)
-	http.HandleFunc("/api/command/get", server.getCommand)
 
 	port := ":8080"
 	log.Printf("Server starting on http://localhost%s", port)
 	log.Printf("Web interface: http://localhost%s", port)
 	log.Printf("Video feed endpoint: http://localhost%s/api/video (POST)", port)
 	log.Printf("Command endpoint: http://localhost%s/api/command (POST)", port)
-	log.Printf("Get command endpoint: http://localhost%s/api/command/get (GET)", port)
 
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)
