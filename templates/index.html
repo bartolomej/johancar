@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JohanCar</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+            max-width: 900px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            aspect-ratio: 16/9;
+        }
+        #videoStream {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 20px 40px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .btn-left {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .btn-right {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .error {
+            color: #f5576c;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="video-container">
+            <img id="videoStream" src="/video" alt="Video Feed">
+        </div>
+        <div class="controls">
+            <button class="btn-left" onclick="sendCommand('left')">← Left</button>
+            <button class="btn-right" onclick="sendCommand('right')">Right →</button>
+        </div>
+        <div class="status" id="status">Ready</div>
+        <div class="error" id="error"></div>
+    </div>
+    <script>
+        const videoStream = document.getElementById('videoStream');
+        const statusEl = document.getElementById('status');
+        const errorEl = document.getElementById('error');
+
+        videoStream.onerror = function() {
+            errorEl.textContent = 'Video feed unavailable. Make sure the hardware is connected and sending video.';
+            errorEl.style.display = 'block';
+        };
+
+        function sendCommand(command) {
+            statusEl.textContent = "Sending: " + command + "...";
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ command: command })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusEl.textContent = "Command sent: " + data.command;
+                setTimeout(() => {
+                    statusEl.textContent = 'Ready';
+                }, 2000);
+            })
+            .catch(error => {
+                statusEl.textContent = 'Error sending command';
+                errorEl.textContent = error.message;
+                errorEl.style.display = 'block';
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowLeft') {
+                sendCommand('left');
+            } else if (e.key === 'ArrowRight') {
+                sendCommand('right');
+            }
+        });
+    </script>
+</body>
+</html>
+
