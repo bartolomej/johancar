@@ -113,8 +113,8 @@ func (s *Server) streamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) pushCommandToHardware(angle, intensity, x, y float64) {
-	log.Printf("Pushing command to hardware: angle=%.2f, intensity=%.2f, x=%.2f, y=%.2f", angle, intensity, x, y)
+func (s *Server) pushCommandToHardware(leftSpeed, rightSpeed int) {
+	log.Printf("Pushing command to hardware: left_motor=%d, right_motor=%d", leftSpeed, rightSpeed)
 
 	address := net.JoinHostPort(s.esp32Address, s.esp32Port)
 	conn, err := net.DialTimeout("tcp", address, 2*time.Second)
@@ -125,7 +125,7 @@ func (s *Server) pushCommandToHardware(angle, intensity, x, y float64) {
 	defer conn.Close()
 
 	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	_, err = fmt.Fprintf(conn, "%.2f %.2f %.2f %.2f\n", angle, intensity, x, y)
+	_, err = fmt.Fprintf(conn, "%d,%d\n", leftSpeed, rightSpeed)
 	if err != nil {
 		log.Printf("Error sending command to ESP32: %v", err)
 		return
@@ -141,10 +141,8 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cmd struct {
-		Angle     float64 `json:"angle"`
-		Intensity float64 `json:"intensity"`
-		X         float64 `json:"x"`
-		Y         float64 `json:"y"`
+		LeftMotorSpeed  int `json:"left_motor_speed"`
+		RightMotorSpeed int `json:"right_motor_speed"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
@@ -152,15 +150,18 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.pushCommandToHardware(cmd.Angle, cmd.Intensity, cmd.X, cmd.Y)
+	if cmd.LeftMotorSpeed < 0 || cmd.LeftMotorSpeed > 1 || cmd.RightMotorSpeed < 0 || cmd.RightMotorSpeed > 1 {
+		http.Error(w, "Motor speeds must be 0 or 1", http.StatusBadRequest)
+		return
+	}
+
+	s.pushCommandToHardware(cmd.LeftMotorSpeed, cmd.RightMotorSpeed)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"status":    "ok",
-		"angle":     cmd.Angle,
-		"intensity": cmd.Intensity,
-		"x":         cmd.X,
-		"y":         cmd.Y,
+		"status":            "ok",
+		"left_motor_speed":  cmd.LeftMotorSpeed,
+		"right_motor_speed": cmd.RightMotorSpeed,
 	})
 }
 

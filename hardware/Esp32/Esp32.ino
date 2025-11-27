@@ -9,8 +9,6 @@ const int COMMAND_PORT = 8081;
 
 const int LEFT_MOTOR_PIN = 12;
 const int RIGHT_MOTOR_PIN = 14;
-const float INTENSITY_THRESHOLD = 0.1;
-const float ANGLE_THRESHOLD = 10.0;
 
 WiFiServer server(COMMAND_PORT);
 
@@ -72,19 +70,16 @@ void loop() {
         if (command.length() > 0) {
           Serial.printf("Received command: %s\n", command.c_str());
 
-          float angle = 0.0;
-          float intensity = 0.0;
-          float x = 0.0;
-          float y = 0.0;
+          int leftSpeed = 0;
+          int rightSpeed = 0;
 
-          int parsed = sscanf(command.c_str(), "%f %f %f %f", &angle, &intensity, &x, &y);
+          int parsed = sscanf(command.c_str(), "%d,%d", &leftSpeed, &rightSpeed);
           
-          if (parsed == 4) {
-            Serial.printf("Parsed - angle: %.2f, intensity: %.2f, x: %.2f, y: %.2f\n", 
-                          angle, intensity, x, y);
-            controlMotors(angle, intensity);
+          if (parsed == 2) {
+            Serial.printf("Parsed - left: %d, right: %d\n", leftSpeed, rightSpeed);
+            controlMotors(leftSpeed, rightSpeed);
           } else {
-            Serial.printf("Parse error: expected 4 values, got %d\n", parsed);
+            Serial.printf("Parse error: expected 2 values (left,right), got %d\n", parsed);
           }
         }
       }
@@ -97,26 +92,12 @@ void loop() {
   delay(10);
 }
 
-void controlMotors(float angle, float intensity) {
-  if (intensity < INTENSITY_THRESHOLD) {
-    digitalWrite(LEFT_MOTOR_PIN, LOW);
-    digitalWrite(RIGHT_MOTOR_PIN, LOW);
-    Serial.println("Motors: OFF (low intensity)");
-    return;
-  }
-
-  if (angle < -ANGLE_THRESHOLD) {
-    digitalWrite(LEFT_MOTOR_PIN, LOW);
-    digitalWrite(RIGHT_MOTOR_PIN, HIGH);
-    Serial.println("Motors: RIGHT ON (turning left)");
-  } else if (angle > ANGLE_THRESHOLD) {
-    digitalWrite(LEFT_MOTOR_PIN, HIGH);
-    digitalWrite(RIGHT_MOTOR_PIN, LOW);
-    Serial.println("Motors: LEFT ON (turning right)");
-  } else {
-    digitalWrite(LEFT_MOTOR_PIN, HIGH);
-    digitalWrite(RIGHT_MOTOR_PIN, HIGH);
-    Serial.println("Motors: BOTH ON (going straight)");
-  }
+void controlMotors(int leftSpeed, int rightSpeed) {
+  digitalWrite(LEFT_MOTOR_PIN, leftSpeed == 1 ? HIGH : LOW);
+  digitalWrite(RIGHT_MOTOR_PIN, rightSpeed == 1 ? HIGH : LOW);
+  
+  Serial.printf("Motors: LEFT=%s, RIGHT=%s\n", 
+                leftSpeed == 1 ? "ON" : "OFF",
+                rightSpeed == 1 ? "ON" : "OFF");
 }
 
