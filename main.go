@@ -11,21 +11,26 @@ import (
 	"io"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"sync"
 	"time"
 )
 
 type Server struct {
-	videoBuffer []byte
-	videoMutex  sync.RWMutex
-	frameCount  int
-	frameMutex  sync.Mutex
+	videoBuffer  []byte
+	videoMutex   sync.RWMutex
+	frameCount   int
+	frameMutex   sync.Mutex
+	esp32Address string
+	esp32Port    string
 }
 
 func NewServer() *Server {
 	return &Server{
-		videoBuffer: make([]byte, 0),
+		videoBuffer:  make([]byte, 0),
+		esp32Address: "192.168.1.213",
+		esp32Port:    "8081",
 	}
 }
 
@@ -110,6 +115,23 @@ func (s *Server) streamVideo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) pushCommandToHardware(angle, intensity, x, y float64) {
 	log.Printf("Pushing command to hardware: angle=%.2f, intensity=%.2f, x=%.2f, y=%.2f", angle, intensity, x, y)
+
+	address := net.JoinHostPort(s.esp32Address, s.esp32Port)
+	conn, err := net.DialTimeout("tcp", address, 2*time.Second)
+	if err != nil {
+		log.Printf("Error connecting to ESP32 at %s: %v", address, err)
+		return
+	}
+	defer conn.Close()
+
+	conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	_, err = fmt.Fprintf(conn, "%.2f %.2f %.2f %.2f\n", angle, intensity, x, y)
+	if err != nil {
+		log.Printf("Error sending command to ESP32: %v", err)
+		return
+	}
+
+	log.Printf("Command sent successfully to ESP32")
 }
 
 func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
