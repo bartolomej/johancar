@@ -11,6 +11,7 @@ const int LEFT_MOTOR_PIN = 12;
 const int RIGHT_MOTOR_PIN = 14;
 
 WiFiServer server(COMMAND_PORT);
+WiFiClient client;
 
 void setup() {
   Serial.begin(115200);
@@ -54,39 +55,50 @@ void setup() {
 
   server.begin();
   Serial.printf("Command server started on port %d\n", COMMAND_PORT);
+  Serial.println("Waiting for client connection...");
+  
+  // TODO: Instead of waiting for the Go server to connect (issue the first command) to the hardware, initiate a connection to the Go server first
+  while (!client) {
+    client = server.accept();
+    delay(100);
+  }
+  
+  Serial.println("Client connected!");
 }
 
 void loop() {
-  WiFiClient client = server.available();
+  if (!client || !client.connected()) {
+    if (client) {
+      client.stop();
+      Serial.println("Client disconnected, waiting for new connection...");
+    }
+    client = server.available();
+    if (client) {
+      Serial.println("New client connected");
+    }
+    delay(100);
+    return;
+  }
 
-  if (client) {
-    Serial.println("New client connected");
+  if (client.available()) {
+    String command = client.readStringUntil('\n');
+    command.trim();
 
-    while (client.connected()) {
-      if (client.available()) {
-        String command = client.readStringUntil('\n');
-        command.trim();
+    if (command.length() > 0) {
+      Serial.printf("Received command: %s\n", command.c_str());
 
-        if (command.length() > 0) {
-          Serial.printf("Received command: %s\n", command.c_str());
+      int leftSpeed = 0;
+      int rightSpeed = 0;
 
-          int leftSpeed = 0;
-          int rightSpeed = 0;
-
-          int parsed = sscanf(command.c_str(), "%d,%d", &leftSpeed, &rightSpeed);
-          
-          if (parsed == 2) {
-            Serial.printf("Parsed - left: %d, right: %d\n", leftSpeed, rightSpeed);
-            controlMotors(leftSpeed, rightSpeed);
-          } else {
-            Serial.printf("Parse error: expected 2 values (left,right), got %d\n", parsed);
-          }
-        }
+      int parsed = sscanf(command.c_str(), "%d,%d", &leftSpeed, &rightSpeed);
+      
+      if (parsed == 2) {
+        Serial.printf("Parsed - left: %d, right: %d\n", leftSpeed, rightSpeed);
+        controlMotors(leftSpeed, rightSpeed);
+      } else {
+        Serial.printf("Parse error: expected 2 values (left,right), got %d\n", parsed);
       }
     }
-
-    client.stop();
-    Serial.println("Client disconnected");
   }
 
   delay(10);
