@@ -48,38 +48,16 @@
             height: 100%;
             object-fit: contain;
         }
-        .controls {
+        .joystick-container {
             display: flex;
             justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
+            margin-bottom: 20px;
         }
-        button {
-            padding: 20px 40px;
-            font-size: 1.2em;
-            font-weight: bold;
-            border: none;
-            border-radius: 10px;
+        #joystickCanvas {
+            border-radius: 50%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        .btn-left {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-        .btn-right {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
+            touch-action: none;
         }
         .status {
             text-align: center;
@@ -100,9 +78,8 @@
         <div class="video-container">
             <img id="videoStream" src="/video" alt="Video Feed">
         </div>
-        <div class="controls">
-            <button class="btn-left" onclick="sendCommand('left')">← Left</button>
-            <button class="btn-right" onclick="sendCommand('right')">Right →</button>
+        <div class="joystick-container">
+            <canvas id="joystickCanvas" width="200" height="200"></canvas>
         </div>
         <div class="status" id="status">Ready</div>
         <div class="error" id="error"></div>
@@ -117,22 +94,80 @@
             errorEl.style.display = 'block';
         };
 
-        function sendCommand(command) {
-            statusEl.textContent = "Sending: " + command + "...";
+        const canvas = document.getElementById('joystickCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const maxRadius = 80;
+        let isActive = false;
+        let currentX = centerX;
+        let currentY = centerY;
+        let sendInterval = null;
+
+        function drawJoystick() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#e0e0e0';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, maxRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            const distance = Math.sqrt(Math.pow(currentX - centerX, 2) + Math.pow(currentY - centerY, 2));
+            const limitedDistance = Math.min(distance, maxRadius);
+            const angle = Math.atan2(currentY - centerY, currentX - centerX);
+            
+            const stickX = centerX + limitedDistance * Math.cos(angle);
+            const stickY = centerY + limitedDistance * Math.sin(angle);
+            
+            ctx.fillStyle = isActive ? '#667eea' : '#764ba2';
+            ctx.beginPath();
+            ctx.arc(stickX, stickY, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        function getJoystickData() {
+            const dx = currentX - centerX;
+            const dy = currentY - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const normalizedDistance = Math.min(distance / maxRadius, 1.0);
+            const angle = Math.atan2(dy, dx);
+            
+            return {
+                angle: angle,
+                intensity: normalizedDistance,
+                x: dx / maxRadius,
+                y: dy / maxRadius
+            };
+        }
+
+        function sendCommand() {
+            if (!isActive) return;
+            
+            const data = getJoystickData();
             
             fetch('/api/command', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ command: command })
+                body: JSON.stringify({
+                    angle: data.angle,
+                    intensity: data.intensity,
+                    x: data.x,
+                    y: data.y
+                })
             })
             .then(response => response.json())
             .then(data => {
-                statusEl.textContent = "Command sent: " + data.command;
-                setTimeout(() => {
-                    statusEl.textContent = 'Ready';
-                }, 2000);
+                statusEl.textContent = 'Active';
             })
             .catch(error => {
                 statusEl.textContent = 'Error sending command';
@@ -141,13 +176,79 @@
             });
         }
 
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'ArrowLeft') {
-                sendCommand('left');
-            } else if (e.key === 'ArrowRight') {
-                sendCommand('right');
+        function startSending() {
+            if (sendInterval) return;
+            isActive = true;
+            sendCommand();
+            sendInterval = setInterval(sendCommand, 50);
+        }
+
+        function stopSending() {
+            if (sendInterval) {
+                clearInterval(sendInterval);
+                sendInterval = null;
+            }
+            isActive = false;
+            currentX = centerX;
+            currentY = centerY;
+            drawJoystick();
+            
+            fetch('/api/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    angle: 0,
+                    intensity: 0,
+                    x: 0,
+                    y: 0
+                })
+            });
+            
+            statusEl.textContent = 'Ready';
+        }
+
+        function updatePosition(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            currentX = clientX - rect.left;
+            currentY = clientY - rect.top;
+            drawJoystick();
+        }
+
+        canvas.addEventListener('mousedown', function(e) {
+            updatePosition(e.clientX, e.clientY);
+            startSending();
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+            if (isActive) {
+                updatePosition(e.clientX, e.clientY);
             }
         });
+
+        canvas.addEventListener('mouseup', stopSending);
+        canvas.addEventListener('mouseleave', stopSending);
+
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            updatePosition(touch.clientX, touch.clientY);
+            startSending();
+        });
+
+        canvas.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            if (isActive && e.touches.length > 0) {
+                const touch = e.touches[0];
+                updatePosition(touch.clientX, touch.clientY);
+            }
+        });
+
+        canvas.addEventListener('touchend', stopSending);
+        canvas.addEventListener('touchcancel', stopSending);
+
+        drawJoystick();
     </script>
 </body>
 </html>

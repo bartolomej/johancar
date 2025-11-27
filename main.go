@@ -108,8 +108,8 @@ func (s *Server) streamVideo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) pushCommandToHardware(command string) {
-	log.Printf("Pushing command to hardware: %s", command)
+func (s *Server) pushCommandToHardware(angle, intensity, x, y float64) {
+	log.Printf("Pushing command to hardware: angle=%.2f, intensity=%.2f, x=%.2f, y=%.2f", angle, intensity, x, y)
 }
 
 func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +119,10 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cmd struct {
-		Command string `json:"command"`
+		Angle     float64 `json:"angle"`
+		Intensity float64 `json:"intensity"`
+		X         float64 `json:"x"`
+		Y         float64 `json:"y"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
@@ -127,15 +130,16 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cmd.Command != "left" && cmd.Command != "right" {
-		http.Error(w, "Invalid command. Use 'left' or 'right'", http.StatusBadRequest)
-		return
-	}
-
-	s.pushCommandToHardware(cmd.Command)
+	s.pushCommandToHardware(cmd.Angle, cmd.Intensity, cmd.X, cmd.Y)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "command": cmd.Command})
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":    "ok",
+		"angle":     cmd.Angle,
+		"intensity": cmd.Intensity,
+		"x":         cmd.X,
+		"y":         cmd.Y,
+	})
 }
 
 func (s *Server) handleWebView(w http.ResponseWriter, r *http.Request) {
