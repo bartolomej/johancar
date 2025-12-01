@@ -1,7 +1,8 @@
 #include <WiFi.h>
 
-const char* wifiConfigs[1][2] = {
-    {"A1-182E60", "T33NLTQTJL"}
+const char* wifiConfigs[2][2] = {
+    {"A1-182E60", "T33NLTQTJL"}, // Home
+    {"TP-Link_E625", "3iwSyK7a"}, // Airbnb
 };
 
 const int WIFI_CONFIG_COUNT = sizeof(wifiConfigs) / sizeof(wifiConfigs[0]);
@@ -28,6 +29,11 @@ void setup() {
   bool connected = false;
   for (int i = 0; i < WIFI_CONFIG_COUNT; i++) {
     Serial.printf("Attempting to connect to: %s\n", wifiConfigs[i][0]);
+    
+    WiFi.disconnect();
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    
     WiFi.begin(wifiConfigs[i][0], wifiConfigs[i][1]);
 
     int attempts = 0;
@@ -44,7 +50,7 @@ void setup() {
       Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
       break;
     } else {
-      Serial.printf("\nConnection failed %d, trying next network...", WiFi.status());
+      Serial.printf("\nConnection failed %d, trying next network...\n", WiFi.status());
     }
   }
 

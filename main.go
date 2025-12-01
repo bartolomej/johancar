@@ -29,7 +29,7 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{
 		videoBuffer:  make([]byte, 0),
-		esp32Address: "192.168.1.213",
+		esp32Address: "192.168.0.8",
 		esp32Port:    "8081",
 	}
 }
